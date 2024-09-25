@@ -1,0 +1,69 @@
+{
+    "name": "atom-workspace",
+    "description": "development environment to develop atom projects",
+    "version": "1.0",
+    "dependencies": [
+        {
+            "name": "cpptrace",
+            "version>=": "0.7.1"
+        },
+        {
+            "name": "fmt",
+            "version>=": "11.0.2"
+        },
+        {
+            "name": "catch2",
+            "version>=": "3.7.1"
+        },
+        {
+            "name": "magic-enum",
+            "version>=": "0.9.6"
+        },
+        {
+            "name": "glm",
+            "version>=": "1.0.1"
+        },
+        {
+            "name": "entt",
+            "version>=": "3.13.2"
+        },
+        {
+            "name": "glfw3",
+            "version>=": "3.4"
+        },
+        {
+            "name": "box2d",
+            "version>=": "2.4.1"
+        },
+        {
+            "name": "spirv-tools",
+            "version>=": "1.3.290.0"
+        },
+        {
+            "name": "imgui",
+            "version>=": "1.91.0",
+            "features": [
+                "glfw-binding",
+                "opengl3-binding",
+                "docking-experimental"
+            ]
+        },
+        {
+            "name": "stb",
+            "version>=": "2024-07-29#1"
+        },
+        {
+            "name": "glad",
+            "version>=": "0.1.36"
+        },
+        {
+            "name": "msdfgen",
+            "version>=": "1.12"
+        },
+        {
+            "name": "glslang",
+            "version>=": "14.3.0"
+        }
+    ],
+    "builtin-baseline": "f176b58f35a75f9f8f54099cd9df97d2e2793a2e"
+}
