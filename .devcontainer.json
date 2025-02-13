@@ -1,0 +1,6 @@
+{
+	"name": "Existing Dockerfile",
+	"build": {
+		"dockerfile": "dockerfile"
+	}
+}
