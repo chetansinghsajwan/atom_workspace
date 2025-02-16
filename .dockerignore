@@ -1,0 +1,15 @@
+.git
+.gitignore
+.gitmodules
+.dockerignore
+.devcontainer.json
+.cmake-format.json
+dockerfile*
+
+# gitignore at /
+.vs
+.vscode
+build/
+.cache/
+imgui.ini
+vcpkg_installed
