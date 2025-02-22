@@ -1,6 +1,5 @@
 FROM ubuntu:24.04 AS base
 
-ARG DEPS_SOURCE_DIR="/sources"
 ARG CLANG_VERSION="18"
 ARG CATCH2_VERSION="3.8.0"
 ARG CPPTRACE_VERSION="0.7.5"
@@ -205,7 +204,7 @@ RUN git clone "https://github.com/KhronosGroup/glslang.git" . \
 
 FROM base AS imgui-builder
 
-RUN git clone "https://github.com/ocornut/imgui.git" $INSTALL_DIR \
+RUN git clone "https://github.com/ocornut/imgui.git" $INSTALL_DIR/src/imgui \
     --depth 1 --branch $IMGUI_VERSION
 
 # -------------------------------------------------------------------------------------------------
@@ -304,7 +303,7 @@ RUN git clone "https://github.com/Chlumsky/msdf-atlas-gen.git" . \
 
 FROM base AS stb-builder
 
-RUN git clone "https://github.com/nothings/stb.git" $INSTALL_DIR \
+RUN git clone "https://github.com/nothings/stb.git" $INSTALL_DIR/src/stb \
     --depth 1 --branch $STB_VERSION
 
 # -------------------------------------------------------------------------------------------------
@@ -350,13 +349,10 @@ COPY --from=entt-builder $INSTALL_DIR /usr/local
 COPY --from=glfw-builder $INSTALL_DIR /usr/local
 COPY --from=glm-builder $INSTALL_DIR /usr/local
 COPY --from=glslang-builder $INSTALL_DIR /usr/local
-COPY --from=imgui-builder $INSTALL_DIR $DEPS_SOURCE_DIR/imgui
+COPY --from=imgui-builder $INSTALL_DIR /usr/local
 COPY --from=zlib-builder $INSTALL_DIR /usr/local
 COPY --from=png-builder $INSTALL_DIR /usr/local
 COPY --from=freetype-builder $INSTALL_DIR /usr/local
 COPY --from=tinyxml2-builder $INSTALL_DIR /usr/local
 COPY --from=msdf-atlas-gen-builder $INSTALL_DIR /usr/local
-COPY --from=stb-builder $INSTALL_DIR $DEPS_SOURCE_DIR/stb
-
-ENV STB_SOURCE="$DEPS_SOURCE_DIR/stb"
-ENV IMGUI_SOURCE="$DEPS_SOURCE_DIR/imgui"
+COPY --from=stb-builder $INSTALL_DIR /usr/local
