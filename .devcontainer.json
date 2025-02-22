@@ -1,8 +1,7 @@
 {
 	"name": "Existing Dockerfile",
 	"build": {
-		"dockerfile": "dockerfile",
-		"target": "devenv"
+		"dockerfile": "dockerfile"
 	},
 	"remoteUser": "root"
 }

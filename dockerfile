@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/vscode/devcontainers/base:ubuntu-24.04 AS base
+FROM ubuntu:24.04 AS base
 
 ARG DEPS_SOURCE_DIR="/sources"
 ARG CLANG_VERSION="18"
@@ -12,8 +12,14 @@ ARG GLFW_VERSION="3.4"
 ARG GLM_VERSION="release-1.0.2"
 ARG GLSLANG_VERSION="15.1.0"
 ARG IMGUI_VERSION="docking"
+ARG ZLIB_VERSION="1.3.1"
+ARG PNG_VERSION="1.6.46"
+ARG FREETYPE_VERSION="VER-2-13-3"
+ARG TINYXML2_VERSION="10.0.0"
 ARG MSDF_ATLAS_GEN_VERSION="1.3"
 ARG STB_VERSION="master"
+ARG LLVM_MINGW_TOOLCHAIN_URI="20250114/llvm-mingw-20250114-ucrt-ubuntu-20.04-x86_64.tar.xz"
+ARG INSTALL_DIR="/out"
 
 # -------------------------------------------------------------------------------------------------
 # Install build tools
@@ -21,19 +27,37 @@ ARG STB_VERSION="master"
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
-    clang-$CLANG_VERSION \
-    libc++-$CLANG_VERSION-dev \
     ninja-build \
     cmake \
     pkg-config \
+    wget \
+    xz-utils \
     git \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-ENV CC="clang-$CLANG_VERSION" \
-    CXX="clang++-$CLANG_VERSION" \
-    CXXFLAGS="-stdlib=libc++" \
-    CMAKE_GENERATOR="Ninja"
+ENV CMAKE_GENERATOR="Ninja"
+
+# -------------------------------------------------------------------------------------------------
+# Install toolchain
+# -------------------------------------------------------------------------------------------------
+
+ENV TOOLCHAIN_ROOT="/opt/llvm-mingw"
+RUN wget https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TOOLCHAIN_URI \
+    -O llvm-mingw.tar.xz \
+    && mkdir $TOOLCHAIN_ROOT \
+    && tar -xf llvm-mingw.tar.xz --directory $TOOLCHAIN_ROOT --strip-components=1 \
+    && rm llvm-mingw.tar.xz
+
+ENV PATH=$TOOLCHAIN_ROOT/bin:$PATH \
+    CC="$TOOLCHAIN_ROOT/bin/clang" \
+    CXX="$TOOLCHAIN_ROOT/bin/clang++" \
+    RC="$TOOLCHAIN_ROOT/bin/x86_64-w64-mingw32-windres" \
+    CMAKE_TOOLCHAIN_FILE="/opt/cmake/toolchain.cmake"
+
+COPY cmake/llvm-mingw-w64-toolchain.cmake $CMAKE_TOOLCHAIN_FILE
+
+WORKDIR /app
 
 # -------------------------------------------------------------------------------------------------
 # Install catch2, required by
@@ -42,12 +66,11 @@ ENV CC="clang-$CLANG_VERSION" \
 
 FROM base AS catch2-builder
 
-RUN git clone "https://github.com/catchorg/catch2.git" \
+RUN git clone "https://github.com/catchorg/catch2.git" . \
     --depth 1 --branch v$CATCH2_VERSION \
-    && cd catch2 \
     && cmake -S . -B build \
     && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install cpptrace, required by
@@ -56,12 +79,11 @@ RUN git clone "https://github.com/catchorg/catch2.git" \
 
 FROM base AS cpptrace-builder
 
-RUN git clone "https://github.com/jeremy-rifkin/cpptrace.git" \
+RUN echo $CPPTRACE_VERSION && git clone "https://github.com/jeremy-rifkin/cpptrace.git" . \
     --depth 1 --branch v$CPPTRACE_VERSION \
-    && cd cpptrace \
     && cmake -S . -B build \
     && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install fmt, required by
@@ -70,12 +92,11 @@ RUN git clone "https://github.com/jeremy-rifkin/cpptrace.git" \
 
 FROM base AS fmt-builder
 
-RUN git clone "https://github.com/fmtlib/fmt.git" \
+RUN git clone "https://github.com/fmtlib/fmt.git" . \
     --depth 1 --branch $FMT_VERSION \
-    && cd fmt \
     && cmake -S . -B build \
-    && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --build build --target fmt \
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install magic_enum, required by
@@ -84,12 +105,11 @@ RUN git clone "https://github.com/fmtlib/fmt.git" \
 
 FROM base AS magic_enum-builder
 
-RUN git clone "https://github.com/neargye/magic_enum.git" \
+# No need to build magic_enum, it is header only
+RUN git clone "https://github.com/neargye/magic_enum.git" . \
     --depth 1 --branch v$MAGIC_ENUM_VERSION \
-    && cd magic_enum \
     && cmake -S . -B build \
-    && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install box2d, required by
@@ -98,9 +118,8 @@ RUN git clone "https://github.com/neargye/magic_enum.git" \
 
 FROM base AS box2d-builder
 
-RUN git clone "https://github.com/erincatto/box2d.git" \
+RUN git clone "https://github.com/erincatto/box2d.git" . \
     --depth 1 --branch v$BOX2D_VERSION \
-    && cd box2d \
     && cmake -S . -B build \
     -D BOX2D_BUILD_UNIT_TESTS=OFF \
     -D BOX2D_BUILD_TESTBED=OFF \
@@ -108,7 +127,7 @@ RUN git clone "https://github.com/erincatto/box2d.git" \
     -D BOX2D_USER_SETTINGS=OFF \
     -D BUILD_SHARED_LIBS=OFF \
     && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install entt, required by
@@ -117,12 +136,11 @@ RUN git clone "https://github.com/erincatto/box2d.git" \
 
 FROM base AS entt-builder
 
-RUN git clone "https://github.com/skypjack/entt.git" \
+RUN git clone "https://github.com/skypjack/entt.git" . \
     --depth 1 --branch v$ENTT_VERSION \
-    && cd entt \
     && cmake -S . -B build \
     && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install glfw, required by
@@ -140,15 +158,11 @@ RUN apt-get update \
     extra-cmake-modules \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone "https://github.com/glfw/glfw.git" \
+RUN git clone "https://github.com/glfw/glfw.git" . \
     --depth 1 --branch $GLFW_VERSION \
-    && cd glfw \
     && cmake -S . -B build \
-    -D GLFW_BUILD_TESTS=OFF \
-    -D GLFW_BUILD_X11=OFF \
-    -D GLFW_BUILD_WAYLAND=ON \
-    && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --build build --target glfw \
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install glm, required by
@@ -157,14 +171,13 @@ RUN git clone "https://github.com/glfw/glfw.git" \
 
 FROM base AS glm-builder
 
-RUN git clone "https://github.com/g-truc/glm.git" \
+RUN git clone "https://github.com/g-truc/glm.git" . \
     --depth 1 --branch $GLM_VERSION \
-    && cd glm \
     && cmake -S . -B build \
     -D GLM_ENABLE_CXX_20=ON \
     -D GLM_ENABLE_LANG_EXTENSIONS=ON \
     && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install glslang, required by
@@ -178,13 +191,12 @@ RUN apt-get update \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone "https://github.com/KhronosGroup/glslang.git" \
+RUN git clone "https://github.com/KhronosGroup/glslang.git" . \
     --depth 1 --branch $GLSLANG_VERSION \
-    && cd glslang \
     && ./update_glslang_sources.py \
     && cmake -S . -B build \
     && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install imgui, required by
@@ -193,46 +205,97 @@ RUN git clone "https://github.com/KhronosGroup/glslang.git" \
 
 FROM base AS imgui-builder
 
-RUN git clone "https://github.com/ocornut/imgui.git" /out \
+RUN git clone "https://github.com/ocornut/imgui.git" $INSTALL_DIR \
     --depth 1 --branch $IMGUI_VERSION
 
-FROM base AS vcpkg
+# -------------------------------------------------------------------------------------------------
+# Install zlib, required by
+# - png
+# - freetype
+# -------------------------------------------------------------------------------------------------
 
-# Set env variables
-ENV VCPKG_ROOT=/opt/vcpkg
-ENV PATH="$VCPKG_ROOT:$PATH"
-ENV CMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+FROM base AS zlib-builder
 
-# Install vcpkg
-WORKDIR $VCPKG_ROOT
-RUN git clone https://github.com/microsoft/vcpkg.git . \
-    && ./bootstrap-vcpkg.sh
+RUN git clone "https://github.com/madler/zlib.git" . \
+    --depth 1 --branch v$ZLIB_VERSION \
+    && cmake -S . -B build \
+    -D CMAKE_INSTALL_PREFIX=$INSTALL_DIR \
+    && cmake --build build \
+    && cmake --install build
 
-# Reset working directory
-WORKDIR /app
+# Remove the dynamic library
+RUN rm /out/lib/libzlib.dll.a
+
+# -------------------------------------------------------------------------------------------------
+# Install png, required by
+# - freetype
+# - msdf-atlas-gen
+# -------------------------------------------------------------------------------------------------
+
+FROM base AS png-builder
+
+COPY --from=zlib-builder $INSTALL_DIR /usr/local
+
+RUN git clone "https://github.com/pnggroup/libpng.git" . \
+    --depth 1 --branch v$PNG_VERSION \
+    && cmake -S . -B build \
+    -D PNG_STATIC=ON \
+    -D PNG_SHARED=OFF \
+    -D PNG_TESTS=OFF \
+    && cmake --build build \
+    && cmake --install build --prefix $INSTALL_DIR
+
+# -------------------------------------------------------------------------------------------------
+# Install freetype, required by
+# - msdf-atlas-gen
+# -------------------------------------------------------------------------------------------------
+
+FROM base AS freetype-builder
+
+COPY --from=png-builder $INSTALL_DIR /usr/local
+COPY --from=zlib-builder $INSTALL_DIR /usr/local
+
+RUN git clone "https://github.com/freetype/freetype.git" . \
+    --depth 1 --branch $FREETYPE_VERSION \
+    && cmake -S . -B build \
+    -D BUILD_SHARED_LIBS=OFF \
+    && cmake --build build \
+    && cmake --install build --prefix $INSTALL_DIR
+
+# -------------------------------------------------------------------------------------------------
+# Install tinyxml2, required by
+# - msdf-atlas-gen
+# -------------------------------------------------------------------------------------------------
+
+FROM base AS tinyxml2-builder
+
+RUN git clone "https://github.com/leethomason/tinyxml2.git" . \
+    --depth 1 --branch v$TINYXML2_VERSION \
+    && cmake -S . -B build \
+    && cmake --build build \
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install msdf-atlas-gen, required by
 # - atom_engine
 # -------------------------------------------------------------------------------------------------
 
-FROM vcpkg AS msdf-atlas-gen-builder
+FROM base AS msdf-atlas-gen-builder
 
-# Dependencies required for installing msdf-atals-gen
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends \
-    libfreetype-dev \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=zlib-builder $INSTALL_DIR /usr/local
+COPY --from=png-builder $INSTALL_DIR /usr/local
+COPY --from=freetype-builder $INSTALL_DIR /usr/local
+COPY --from=tinyxml2-builder $INSTALL_DIR /usr/local
 
-RUN git clone "https://github.com/Chlumsky/msdf-atlas-gen.git" \
+RUN git clone "https://github.com/Chlumsky/msdf-atlas-gen.git" . \
     --depth 1 --branch v$MSDF_ATLAS_GEN_VERSION --recurse-submodules \
-    && cd msdf-atlas-gen \
     && cmake -S . -B build \
+    -D MSDF_ATLAS_USE_VCPKG=OFF \
     -D MSDF_ATLAS_USE_SKIA=OFF \
     -D MSDF_ATLAS_BUILD_STANDALONE=OFF \
     -D MSDF_ATLAS_INSTALL=ON \
     && cmake --build build \
-    && cmake --install build --prefix /out
+    && cmake --install build --prefix $INSTALL_DIR
 
 # -------------------------------------------------------------------------------------------------
 # Install stb, required by
@@ -241,7 +304,7 @@ RUN git clone "https://github.com/Chlumsky/msdf-atlas-gen.git" \
 
 FROM base AS stb-builder
 
-RUN git clone "https://github.com/nothings/stb.git" /out \
+RUN git clone "https://github.com/nothings/stb.git" $INSTALL_DIR \
     --depth 1 --branch $STB_VERSION
 
 # -------------------------------------------------------------------------------------------------
@@ -266,17 +329,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # -------------------------------------------------------------------------------------------------
-# Install configuration dependencies
-# -------------------------------------------------------------------------------------------------
-
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends \
-    libpng-dev \
-    libfreetype-dev \
-    libtinyxml2-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# -------------------------------------------------------------------------------------------------
 # Install build dependencies
 # -------------------------------------------------------------------------------------------------
 
@@ -289,20 +341,22 @@ RUN apt-get update \
 # Install dependencies
 # -------------------------------------------------------------------------------------------------
 
-COPY --from=catch2-builder /out /usr/local
-COPY --from=cpptrace-builder /out /usr/local
-COPY --from=fmt-builder /out /usr/local
-COPY --from=magic_enum-builder /out /usr/local
-COPY --from=box2d-builder /out /usr/local
-COPY --from=entt-builder /out /usr/local
-COPY --from=glfw-builder /out /usr/local
-COPY --from=glm-builder /out /usr/local
-COPY --from=glslang-builder /out /usr/local
-COPY --from=imgui-builder /out $DEPS_SOURCE_DIR/imgui
-COPY --from=msdf-atlas-gen-builder /out /usr/local
-COPY --from=stb-builder /out $DEPS_SOURCE_DIR/stb
+COPY --from=catch2-builder $INSTALL_DIR /usr/local
+COPY --from=cpptrace-builder $INSTALL_DIR /usr/local
+COPY --from=fmt-builder $INSTALL_DIR /usr/local
+COPY --from=magic_enum-builder $INSTALL_DIR /usr/local
+COPY --from=box2d-builder $INSTALL_DIR /usr/local
+COPY --from=entt-builder $INSTALL_DIR /usr/local
+COPY --from=glfw-builder $INSTALL_DIR /usr/local
+COPY --from=glm-builder $INSTALL_DIR /usr/local
+COPY --from=glslang-builder $INSTALL_DIR /usr/local
+COPY --from=imgui-builder $INSTALL_DIR $DEPS_SOURCE_DIR/imgui
+COPY --from=zlib-builder $INSTALL_DIR /usr/local
+COPY --from=png-builder $INSTALL_DIR /usr/local
+COPY --from=freetype-builder $INSTALL_DIR /usr/local
+COPY --from=tinyxml2-builder $INSTALL_DIR /usr/local
+COPY --from=msdf-atlas-gen-builder $INSTALL_DIR /usr/local
+COPY --from=stb-builder $INSTALL_DIR $DEPS_SOURCE_DIR/stb
 
 ENV STB_SOURCE="$DEPS_SOURCE_DIR/stb"
 ENV IMGUI_SOURCE="$DEPS_SOURCE_DIR/imgui"
-
-# -------------------------------------------------------------------------------------------------
