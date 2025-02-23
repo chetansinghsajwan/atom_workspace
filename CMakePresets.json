@@ -1,0 +1,25 @@
+{
+  "version": 8,
+  "configurePresets": [
+    {
+      "name": "base",
+      "generator": "Ninja",
+      "toolchainFile": "$env{CMAKE_TOOLCHAIN_DIR}/toolchain-${presetName}.cmake",
+      "binaryDir": "build/${presetName}",
+      "installDir": "out/${presetName}",
+      "hidden": true
+    },
+    { "name": "linux-amd64", "inherits": "base" },
+    { "name": "win-amd64", "inherits": "base" },
+    { "name": "win-i686", "inherits": "base" },
+    { "name": "win-aarch64", "inherits": "base" },
+    { "name": "win-armv7", "inherits": "base" }
+  ],
+  "buildPresets": [
+    { "name": "linux-amd64", "configurePreset": "linux-amd64" },
+    { "name": "win-amd64", "configurePreset": "win-amd64" },
+    { "name": "win-i686", "configurePreset": "win-i686" },
+    { "name": "win-aarch64", "configurePreset": "win-aarch64" },
+    { "name": "win-armv7", "configurePreset": "win-armv7" }
+  ]
+}
