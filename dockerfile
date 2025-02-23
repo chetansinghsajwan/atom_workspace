@@ -1,6 +1,5 @@
-FROM ubuntu:24.04 AS base
+FROM chetansinghsajwan/cmake-dev AS base
 
-ARG CLANG_VERSION="18"
 ARG CATCH2_VERSION="3.8.0"
 ARG CPPTRACE_VERSION="0.7.5"
 ARG FMT_VERSION="11.1.3"
@@ -17,46 +16,10 @@ ARG FREETYPE_VERSION="VER-2-13-3"
 ARG TINYXML2_VERSION="10.0.0"
 ARG MSDF_ATLAS_GEN_VERSION="1.3"
 ARG STB_VERSION="master"
-ARG LLVM_MINGW_TOOLCHAIN_URI="20250114/llvm-mingw-20250114-ucrt-ubuntu-20.04-x86_64.tar.xz"
 ARG INSTALL_DIR="/out"
-
-# -------------------------------------------------------------------------------------------------
-# Install build tools
-# -------------------------------------------------------------------------------------------------
-
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends \
-    ninja-build \
-    cmake \
-    pkg-config \
-    wget \
-    xz-utils \
-    git \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+ARG TOOLCHAIN_LIST="linux-amd64 win-i686 win-amd64 win-armv7 win-aarch64"
 
 ENV CMAKE_GENERATOR="Ninja"
-
-# -------------------------------------------------------------------------------------------------
-# Install toolchain
-# -------------------------------------------------------------------------------------------------
-
-ENV TOOLCHAIN_ROOT="/opt/llvm-mingw"
-RUN wget https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_TOOLCHAIN_URI \
-    -O llvm-mingw.tar.xz \
-    && mkdir $TOOLCHAIN_ROOT \
-    && tar -xf llvm-mingw.tar.xz --directory $TOOLCHAIN_ROOT --strip-components=1 \
-    && rm llvm-mingw.tar.xz
-
-ENV PATH=$TOOLCHAIN_ROOT/bin:$PATH \
-    CC="$TOOLCHAIN_ROOT/bin/clang" \
-    CXX="$TOOLCHAIN_ROOT/bin/clang++" \
-    RC="$TOOLCHAIN_ROOT/bin/x86_64-w64-mingw32-windres" \
-    CMAKE_TOOLCHAIN_FILE="/opt/cmake/toolchain.cmake"
-
-COPY cmake/llvm-mingw-w64-toolchain.cmake $CMAKE_TOOLCHAIN_FILE
-
-WORKDIR /app
 
 # -------------------------------------------------------------------------------------------------
 # Install catch2, required by
@@ -67,9 +30,16 @@ FROM base AS catch2-builder
 
 RUN git clone "https://github.com/catchorg/catch2.git" . \
     --depth 1 --branch v$CATCH2_VERSION \
-    && cmake -S . -B build \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install cpptrace, required by
@@ -80,9 +50,16 @@ FROM base AS cpptrace-builder
 
 RUN echo $CPPTRACE_VERSION && git clone "https://github.com/jeremy-rifkin/cpptrace.git" . \
     --depth 1 --branch v$CPPTRACE_VERSION \
-    && cmake -S . -B build \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install fmt, required by
@@ -93,9 +70,16 @@ FROM base AS fmt-builder
 
 RUN git clone "https://github.com/fmtlib/fmt.git" . \
     --depth 1 --branch $FMT_VERSION \
-    && cmake -S . -B build \
-    && cmake --build build --target fmt \
-    && cmake --install build --prefix $INSTALL_DIR
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    && cmake --build . --target fmt \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install magic_enum, required by
@@ -107,8 +91,15 @@ FROM base AS magic_enum-builder
 # No need to build magic_enum, it is header only
 RUN git clone "https://github.com/neargye/magic_enum.git" . \
     --depth 1 --branch v$MAGIC_ENUM_VERSION \
-    && cmake -S . -B build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install box2d, required by
@@ -119,14 +110,21 @@ FROM base AS box2d-builder
 
 RUN git clone "https://github.com/erincatto/box2d.git" . \
     --depth 1 --branch v$BOX2D_VERSION \
-    && cmake -S . -B build \
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
     -D BOX2D_BUILD_UNIT_TESTS=OFF \
     -D BOX2D_BUILD_TESTBED=OFF \
     -D BOX2D_BUILD_DOCS=OFF \
     -D BOX2D_USER_SETTINGS=OFF \
     -D BUILD_SHARED_LIBS=OFF \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install entt, required by
@@ -137,9 +135,17 @@ FROM base AS entt-builder
 
 RUN git clone "https://github.com/skypjack/entt.git" . \
     --depth 1 --branch v$ENTT_VERSION \
-    && cmake -S . -B build \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && rm -r build \
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install glfw, required by
@@ -159,9 +165,18 @@ RUN apt-get update \
 
 RUN git clone "https://github.com/glfw/glfw.git" . \
     --depth 1 --branch $GLFW_VERSION \
-    && cmake -S . -B build \
-    && cmake --build build --target glfw \
-    && cmake --install build --prefix $INSTALL_DIR
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    -D GLFW_BUILD_X11=OFF \
+    -D GLFW_BUILD_WAYLAND=ON \
+    && cmake --build . --target glfw \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install glm, required by
@@ -172,11 +187,18 @@ FROM base AS glm-builder
 
 RUN git clone "https://github.com/g-truc/glm.git" . \
     --depth 1 --branch $GLM_VERSION \
-    && cmake -S . -B build \
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
     -D GLM_ENABLE_CXX_20=ON \
     -D GLM_ENABLE_LANG_EXTENSIONS=ON \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install glslang, required by
@@ -193,9 +215,16 @@ RUN apt-get update \
 RUN git clone "https://github.com/KhronosGroup/glslang.git" . \
     --depth 1 --branch $GLSLANG_VERSION \
     && ./update_glslang_sources.py \
-    && cmake -S . -B build \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install imgui, required by
@@ -217,13 +246,20 @@ FROM base AS zlib-builder
 
 RUN git clone "https://github.com/madler/zlib.git" . \
     --depth 1 --branch v$ZLIB_VERSION \
-    && cmake -S . -B build \
-    -D CMAKE_INSTALL_PREFIX=$INSTALL_DIR \
-    && cmake --build build \
-    && cmake --install build
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    -D CMAKE_INSTALL_PREFIX=$INSTALL_DIR/$TOOLCHAIN \
+    && cmake --build . \
+    && cmake --install . \
+    && rm -rf * \
+    ; done
 
 # Remove the dynamic library
-RUN rm /out/lib/libzlib.dll.a
+RUN rm -f /out/lib/libzlib.dll.a
 
 # -------------------------------------------------------------------------------------------------
 # Install png, required by
@@ -237,12 +273,19 @@ COPY --from=zlib-builder $INSTALL_DIR /usr/local
 
 RUN git clone "https://github.com/pnggroup/libpng.git" . \
     --depth 1 --branch v$PNG_VERSION \
-    && cmake -S . -B build \
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
     -D PNG_STATIC=ON \
     -D PNG_SHARED=OFF \
     -D PNG_TESTS=OFF \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install freetype, required by
@@ -256,10 +299,17 @@ COPY --from=zlib-builder $INSTALL_DIR /usr/local
 
 RUN git clone "https://github.com/freetype/freetype.git" . \
     --depth 1 --branch $FREETYPE_VERSION \
-    && cmake -S . -B build \
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
     -D BUILD_SHARED_LIBS=OFF \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install tinyxml2, required by
@@ -270,9 +320,16 @@ FROM base AS tinyxml2-builder
 
 RUN git clone "https://github.com/leethomason/tinyxml2.git" . \
     --depth 1 --branch v$TINYXML2_VERSION \
-    && cmake -S . -B build \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install msdf-atlas-gen, required by
@@ -288,13 +345,20 @@ COPY --from=tinyxml2-builder $INSTALL_DIR /usr/local
 
 RUN git clone "https://github.com/Chlumsky/msdf-atlas-gen.git" . \
     --depth 1 --branch v$MSDF_ATLAS_GEN_VERSION --recurse-submodules \
-    && cmake -S . -B build \
+    && mkdir build \
+    && cd build \
+    && for TOOLCHAIN in $TOOLCHAIN_LIST; do \
+    echo "Building for $TOOLCHAIN..." \
+    && cmake .. \
+    -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_DIR/toolchain-$TOOLCHAIN.cmake \
     -D MSDF_ATLAS_USE_VCPKG=OFF \
     -D MSDF_ATLAS_USE_SKIA=OFF \
     -D MSDF_ATLAS_BUILD_STANDALONE=OFF \
     -D MSDF_ATLAS_INSTALL=ON \
-    && cmake --build build \
-    && cmake --install build --prefix $INSTALL_DIR
+    && cmake --build . \
+    && cmake --install . --prefix $INSTALL_DIR/$TOOLCHAIN \
+    && rm -rf * \
+    ; done
 
 # -------------------------------------------------------------------------------------------------
 # Install stb, required by
@@ -310,7 +374,7 @@ RUN git clone "https://github.com/nothings/stb.git" $INSTALL_DIR/src/stb \
 # Development environment
 # -------------------------------------------------------------------------------------------------
 
-FROM base AS devenv
+FROM base AS dev
 
 # -------------------------------------------------------------------------------------------------
 # Install dev tools
